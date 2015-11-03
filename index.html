@@ -1,0 +1,204 @@
+<html>
+    <head>
+        <style>
+            canvas {
+                border: 1px solid black;
+            }
+        </style>
+    </head>
+    <body>
+        <h2> Bezier Curve Editor </h2>
+        <a href="https://github.com/jareguo/curve-editor"> https://github.com/jareguo/curve-editor </a>
+        <br/>
+        <br/>
+        <canvas id="Editor" width="600" height="600"></canvas>
+
+        <script>
+            // types
+            function V2 (x, y) {
+                this.x = x || 0;
+                this.y = y || 0;
+            }
+            V2.lerp = function (from, to, ratio) {
+                return new V2(from.x + (to.x - from.x) * ratio, from.y + (to.y - from.y) * ratio);
+            };
+            V2.sqrDistance = function (lhs, rhs) {
+                var dx = lhs.x - rhs.x;
+                var dy = lhs.y - rhs.y;
+                return dx * dx + dy * dy;
+            };
+
+            function Curve (points) {
+                this.points = points || [];
+                this.beziers = [];
+                this.computeBeziers();
+            }
+            Curve.prototype.computeBeziers = function () {
+                this.beziers.length = 0;
+
+                for (var i = 1; i < this.points.length; i++) {
+                    var startPoint = this.points[i - 1];
+                    var endPoint = this.points[i];
+                    var bezier = new Bezier();
+                    bezier.start = startPoint.pos;
+                    bezier.startCtrlPoint = startPoint.out;
+                    bezier.end = endPoint.pos;
+                    bezier.endCtrlPoint = endPoint.in;
+                    this.beziers.push(bezier);
+                }
+
+                return this.beziers;
+            };
+
+            function Bezier () {
+                this.start = new V2();
+                this.end = new V2();
+                this.startCtrlPoint = new V2(); // cp0, cp1
+                this.endCtrlPoint = new V2();   // cp2, cp3
+            }
+        </script>
+        <script>
+            // data
+            var InitPoints = [
+                {
+                    pos: { x: 100, y: 100 },
+                    out: { x: 300, y: 150 }
+                },
+                {
+                    in: { x: 170, y: 260 },
+                    pos: { x: 250, y: 250 },
+                    out: { x: 300, y: 220 }
+                },
+                {
+                    in: { x: 450, y: 400 },
+                    pos: { x: 500, y: 500 }
+                }
+            ];
+
+            function drawPoint (pos, strokeColor, fillColor, radius) {
+                var radius = radius || 5;
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = strokeColor;
+                ctx.fillStyle = fillColor;
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2, true);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            function drawLine (from, to) {
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "#000";
+                ctx.beginPath();
+                ctx.moveTo(from.x, from.y);
+                ctx.lineTo(to.x, to.y);
+                ctx.stroke();
+            }
+
+            function drawCanvas () {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                var CurvePointStrokeColor = "#000";
+                var ControlPointStrokeColor = "#090";
+                var PointFillColor = "rgba(200,200,200,0.5)";
+                var CurveColor = "#00F";
+                var Delta = 0.01;
+
+                // curve points
+                var i;
+                for (i = 0; i < curve.points.length; i++) {
+                    var point = curve.points[i];
+                    drawPoint(point.pos, CurvePointStrokeColor, PointFillColor);
+                }
+                for (i = 0; i < curve.beziers.length; i++) {
+                    var bezier = curve.beziers[i];
+                    // control points
+                    drawPoint(bezier.startCtrlPoint, ControlPointStrokeColor, PointFillColor);
+                    drawPoint(bezier.endCtrlPoint, ControlPointStrokeColor, PointFillColor);
+                    drawLine(bezier.start, bezier.startCtrlPoint);
+                    drawLine(bezier.end, bezier.endCtrlPoint);
+
+                    // curve
+                    for (var progress = 0; progress < 1; progress += Delta) {
+                        var p01 = V2.lerp(bezier.start, bezier.startCtrlPoint, progress);
+                        var p12 = V2.lerp(bezier.startCtrlPoint, bezier.endCtrlPoint, progress);
+                        var p23 = V2.lerp(bezier.endCtrlPoint, bezier.end, progress);
+                        var p012 = V2.lerp(p01, p12, progress);
+                        var p123 = V2.lerp(p12, p23, progress);
+                        var p0123 = V2.lerp(p012, p123, progress);
+                        drawPoint(p0123, CurveColor, CurveColor, 1);
+                    }
+                }
+            }
+
+            // launch
+            var canvas = document.getElementById("Editor");
+            var ctx = canvas.getContext("2d");
+            var curve = new Curve(InitPoints);
+
+            drawCanvas();
+        </script>
+        <script>
+            // control
+            var SqrHitRadius = 6 * 6;
+
+            var draggingPoint = -1;
+            var draggingType = '';
+
+            canvas.onmousedown = dragStart;
+            canvas.onmousemove = dragging;
+            canvas.onmouseup = canvas.onmouseout = dragEnd;
+
+            function getMousePos (event) {
+                return {
+                    x: event.pageX - canvas.offsetLeft,
+                    y: event.pageY - canvas.offsetTop
+                };
+            }
+
+            function dragStart (event) {
+                var mousePos = getMousePos(event);
+
+                for (var i = 0; i < curve.points.length; i++) {
+                    var point = curve.points[i];
+                    //points.push(bezier.start, bezier.startCtrlPoint, bezier.endCtrlPoint, bezier.end);
+                    var dis = V2.sqrDistance(point.pos, mousePos);
+                    if (dis < SqrHitRadius) {
+                        draggingPoint = i;
+                        draggingType = 'pos';
+                        return;
+                    }
+                    if (point.in) {
+                        dis = V2.sqrDistance(point.in, mousePos);
+                        if (dis < SqrHitRadius) {
+                            draggingPoint = i;
+                            draggingType = 'in';
+                            return;
+                        }
+                    }
+                    if (point.out) {
+                        dis = V2.sqrDistance(point.out, mousePos);
+                        if (dis < SqrHitRadius) {
+                            draggingPoint = i;
+                            draggingType = 'out';
+                            return;
+                        }
+                    }
+                }
+            }
+
+            function dragging (event) {
+                if (draggingType) {
+                    var mousePos = getMousePos(event);
+                    curve.points[draggingPoint][draggingType] = mousePos;
+                    curve.computeBeziers();
+                    drawCanvas();
+                }
+            }
+
+            function dragEnd () {
+                draggingType = '';
+                draggingPoint = -1;
+            }
+        </script>
+    </body>
+</html>
