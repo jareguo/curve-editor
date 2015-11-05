@@ -121,6 +121,14 @@
                 return p0123;
             }
 
+            function bezierAt (C1, C2, C3, C4, t) {
+               var t1 = 1 - t;
+               return C1 * t * t * t +
+                      C2 * 3 * t * t * t1 +
+                      C3 * 3 * t * t1 * t1 +
+                      C4 * t1 * t1 * t1;
+            }
+
             function drawCanvas () {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 var CurvePointStrokeColor = "#000";
@@ -145,8 +153,9 @@
 
                     // curve
                     for (var progress = 0; progress < 1; progress += Delta) {
-                        var pos = getBezierPos(bezier, progress);
-                        drawPoint(pos, CurveColor, CurveColor, 1);
+                        var x = bezierAt(bezier.start.x, bezier.startCtrlPoint.x, bezier.endCtrlPoint.x, bezier.end.x, progress);
+                        var y = bezierAt(bezier.start.y, bezier.startCtrlPoint.y, bezier.endCtrlPoint.y, bezier.end.y, progress);
+                        drawPoint(new v2(x, y), CurveColor, CurveColor, 1);
                     }
                 }
             }
