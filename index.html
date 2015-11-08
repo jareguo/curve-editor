@@ -61,10 +61,18 @@
             function Curve (points) {
                 this.points = points || [];
                 this.beziers = [];
+                this.ratios = [];
+                this.progresses = [];
+
+                this.length = 0;
+
                 this.computeBeziers();
             }
             Curve.prototype.computeBeziers = function () {
                 this.beziers.length = 0;
+                this.ratios.length = 0;
+                this.progresses.length = 0;
+                this.length = 0;
 
                 for (var i = 1; i < this.points.length; i++) {
                     var startPoint = this.points[i - 1];
@@ -75,6 +83,15 @@
                     bezier.end = endPoint.pos;
                     bezier.endCtrlPoint = endPoint.in;
                     this.beziers.push(bezier);
+
+                    this.length += bezier.getLength();
+                }
+
+                var current = 0;
+                for (var i = 0; i < this.beziers.length; i++) {
+                    var bezier = this.beziers[i];
+                    this.ratios[i] = bezier.getLength() / this.length;
+                    this.progresses[i] = current = current + this.ratios[i];
                 }
 
                 return this.beziers;
@@ -263,13 +280,12 @@
                 return p0123;
             }
 
-            function drawCanvas () {
+            function drawCanvas (Speed) {
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
                 var CurvePointStrokeColor = "#000";
                 var ControlPointStrokeColor = "#090";
                 var PointFillColor = "rgba(200,200,200,0.5)";
                 var CurveColor = "#44F";
-                var Delta = 0.02;
 
                 // curve points
                 var i;
@@ -284,12 +300,22 @@
                     drawPoint(bezier.endCtrlPoint, ControlPointStrokeColor, PointFillColor);
                     drawLine(bezier.start, bezier.startCtrlPoint);
                     drawLine(bezier.end, bezier.endCtrlPoint);
+                }
 
-                    // curve
-                    for (var progress = 0; progress < 1; progress += Delta) {
-                        var p = bezier.getPointAt(progress);
-                        drawPoint(new v2(p.x, p.y), CurveColor, CurveColor, 1);
+                var bezierProgress = 0;
+                var bezierIndex = 0;
+
+                while (bezierProgress < 1) {
+                    bezierProgress += Speed;
+                    if (bezierProgress > curve.progresses[bezierIndex]) {
+                        bezierIndex++;
+                        bezierIndex %= curve.beziers.length;
                     }
+
+                    var realProgress = (bezierProgress - (bezierIndex > 0 ? curve.progresses[bezierIndex - 1] : 0) ) / curve.ratios[bezierIndex];
+
+                    var pos = curve.beziers[bezierIndex].getPointAt(realProgress);
+                    drawPoint(pos, CurveColor, CurveColor, 1);
                 }
             }
         </script>
@@ -451,7 +477,7 @@
         <!-- ANIMATION -->
 
         <script>
-            var Speed = 0.005;
+            var Speed = 0.01;
             var PointColor = "#F22";
 
             var bezierIndex = 0;
@@ -460,15 +486,20 @@
                 window.requestAnimationFrame(animate);
 
                 bezierProgress += Speed;
-                if (bezierProgress > 1.0) {
-                    bezierProgress -= 1;
+                if (bezierProgress > curve.progresses[bezierIndex]) {
+                    if (bezierProgress > 1) {
+                        bezierProgress -= 1;
+                    }
+
                     bezierIndex++;
                     bezierIndex %= curve.beziers.length;
                 }
 
-                var pos = curve.beziers[bezierIndex].getPointAt(bezierProgress);
+                var realProgress = (bezierProgress - (bezierIndex > 0 ? curve.progresses[bezierIndex - 1] : 0) ) / curve.ratios[bezierIndex];
 
-                drawCanvas();
+                var pos = curve.beziers[bezierIndex].getPointAt(realProgress);
+
+                drawCanvas(Speed);
                 drawPoint(pos, PointColor, PointColor, 6);
             }
             window.requestAnimationFrame(animate);
